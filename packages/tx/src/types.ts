@@ -383,6 +383,8 @@ export interface FeeMarketEIP1559TxData extends AccessList2930TxData {
 export interface BlobEIP4844TxData extends FeeMarketEIP1559TxData {
   /**
    * Is this an EIP-4844 or EIP-7594 network wrapper transaction
+   * 0: EIP-4844
+   * 1: EIP-7594
    */
   networkWrapperVersion?: BigIntLike
   /**
@@ -403,6 +405,8 @@ export interface BlobEIP4844TxData extends FeeMarketEIP1559TxData {
   kzgCommitments?: BytesLike[]
   /**
    * The KZG proofs associated with the transaction
+   * EIP-4844 (networkWrapperVersion = 0): blob proofs (1 per blob)
+   * EIP-7594 (networkWrapperVersion = 1): cell proofs (128 per blob)
    */
   kzgProofs?: BytesLike[]
   /**
