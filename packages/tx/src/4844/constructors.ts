@@ -4,6 +4,7 @@ import {
   EthereumJSErrorWithoutCode,
   bigIntToHex,
   blobsToCells,
+  blobsToCellsAndProofs,
   blobsToCommitments,
   blobsToProofs,
   bytesToBigInt,
@@ -89,13 +90,16 @@ const validateBlobTransactionNetworkWrapper = (
  * Instantiate a transaction from a data dictionary.
  *
  * Format: { chainId, nonce, gasPrice, gasLimit, to, value, data, accessList,
- * v, r, s, blobs, kzgCommitments, blobVersionedHashes, kzgProofs }
+ * v, r, s, blobs, kzgCommitments, blobVersionedHashes, kzgProofs, networkWrapperVersion }
  *
  * Notes:
  * - `chainId` will be set automatically if not provided
  * - All parameters are optional and have some basic default values
  * - `blobs` cannot be supplied as well as `kzgCommitments`, `blobVersionedHashes`, `kzgProofs`
  * - If `blobs` is passed in,  `kzgCommitments`, `blobVersionedHashes`, `kzgProofs` will be derived by the constructor
+ * - Proof type is determined by `networkWrapperVersion` or EIP-7594 activation:
+ *   - EIP-4844 (version 0): generates blob proofs (1 per blob)
+ *   - EIP-7594 (version 1): generates cell proofs (128 per blob)
  */
 export function createBlob4844Tx(txData: TxData, opts?: TxOptions) {
   if (opts?.common?.customCrypto?.kzg === undefined) {
@@ -135,11 +139,29 @@ export function createBlob4844Tx(txData: TxData, opts?: TxOptions) {
     txData.blobVersionedHashes ??= commitmentsToVersionedHashes(
       txData.kzgCommitments as PrefixedHexString[],
     )
-    txData.kzgProofs ??= blobsToProofs(
-      kzg,
-      txData.blobs as PrefixedHexString[],
-      txData.kzgCommitments as PrefixedHexString[],
-    )
+
+    // Determine network wrapper version for proof generation
+    const networkWrapperVersion = opts?.common?.isActivatedEIP(7594)
+      ? 1
+      : (txData.networkWrapperVersion ?? 0)
+
+    // Set the networkWrapperVersion if not provided or if EIP-7594 is activated
+    if (txData.networkWrapperVersion === undefined || opts?.common?.isActivatedEIP(7594)) {
+      txData.networkWrapperVersion = networkWrapperVersion
+    }
+
+    // Generate proofs based on network wrapper version
+    if (networkWrapperVersion === 1) {
+      // EIP-7594: Generate cell proofs
+      txData.kzgProofs ??= blobsToCellsAndProofs(kzg, txData.blobs as PrefixedHexString[])[1]
+    } else {
+      // EIP-4844: Generate blob proofs
+      txData.kzgProofs ??= blobsToProofs(
+        kzg,
+        txData.blobs as PrefixedHexString[],
+        txData.kzgCommitments as PrefixedHexString[],
+      )
+    }
   }
 
   return new Blob4844Tx(txData, opts)
