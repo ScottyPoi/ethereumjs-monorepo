@@ -1,5 +1,6 @@
 import {
   BIGINT_0,
+  CELLS_PER_EXT_BLOB,
   EthereumJSErrorWithoutCode,
   MAX_INTEGER,
   TypeOutput,
@@ -256,6 +257,28 @@ export class Blob4844Tx implements TransactionInterface<typeof TransactionType.B
       toType(commitment, TypeOutput.PrefixedHexString),
     )
     this.kzgProofs = txData.kzgProofs?.map((proof) => toType(proof, TypeOutput.PrefixedHexString))
+
+    // Validate proof count matches expected count for network wrapper version
+    if (
+      this.kzgProofs !== undefined &&
+      this.blobs !== undefined &&
+      this.blobs.length > 0 &&
+      this.networkWrapperVersion !== undefined
+    ) {
+      const expectedProofCount =
+        this.networkWrapperVersion === NetworkWrapperType.EIP7594
+          ? this.blobs.length * CELLS_PER_EXT_BLOB
+          : this.blobs.length
+
+      if (this.kzgProofs.length !== expectedProofCount) {
+        const msg = Legacy.errorMsg(
+          this,
+          `Invalid number of KZG proofs for ${this.blobs.length} blobs: expected ${expectedProofCount} (${this.networkWrapperVersion === NetworkWrapperType.EIP7594 ? 'cell' : 'blob'} proofs), got ${this.kzgProofs.length}`,
+        )
+        throw EthereumJSErrorWithoutCode(msg)
+      }
+    }
+
     const freeze = opts?.freeze ?? true
     if (freeze) {
       Object.freeze(this)
